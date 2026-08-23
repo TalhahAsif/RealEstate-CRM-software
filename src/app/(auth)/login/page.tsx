@@ -1,12 +1,49 @@
+"use client";
+
+import { useState, type SubmitEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import type { ApiResponse } from "@/types";
 
-// Placeholder only — no authentication is wired up yet. This route exists
-// so the (auth) layout group has a landing point for the future auth flow.
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = (await response.json()) as ApiResponse;
+
+      if (!response.ok || !result.success) {
+        setError(result.message || "Unable to sign in");
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center text-center">
@@ -14,20 +51,45 @@ export default function LoginPage() {
           <Building2 className="size-5" />
         </div>
         <CardTitle>Sign in to Estate CRM</CardTitle>
-        <CardDescription>Authentication isn&apos;t implemented yet.</CardDescription>
+        <CardDescription>Enter your credentials to continue.</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="you@example.com" disabled />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" type="password" placeholder="••••••••" disabled />
-        </div>
-        <Button disabled title="Coming soon" className="w-full">
-          Sign in
-        </Button>
+      <CardContent>
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Signing in…" : "Sign in"}
+          </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Create one
+            </Link>
+          </p>
+        </form>
       </CardContent>
     </Card>
   );

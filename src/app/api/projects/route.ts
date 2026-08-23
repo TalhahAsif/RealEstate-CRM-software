@@ -1,9 +1,9 @@
-import { readyResponse, notImplementedResponse } from "@/lib/api/response";
+import { SuccessResponse, ErrorResponse } from "@/lib/api/response";
 
 export async function GET() {
-  return readyResponse("Projects");
+  return SuccessResponse("Projects");
 }
 
 export async function POST() {
-  return notImplementedResponse("Creating a project");
+  return ErrorResponse("Creating a project is not implemented yet.");
 }

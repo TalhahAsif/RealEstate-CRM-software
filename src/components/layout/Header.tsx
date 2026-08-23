@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,19 @@ import { SidebarNav } from "@/components/layout/Sidebar";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 
 export function Header() {
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/60 sm:px-6">
@@ -66,7 +79,9 @@ export function Header() {
           <DropdownMenuItem asChild>
             <a href="/settings">Settings</a>
           </DropdownMenuItem>
-          <DropdownMenuItem disabled>Sign out</DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleSignOut} disabled={isSigningOut}>
+            Sign out
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>
