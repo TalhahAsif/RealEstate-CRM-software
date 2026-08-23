@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/signup"];
 
 // Fast, cookie-presence-only check. The authoritative check (session validity,
 // expiry, user.isActive) happens in `(main)/layout.tsx` via getSessionUser(),
@@ -10,6 +10,7 @@ const PUBLIC_PATHS = ["/login"];
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = request.cookies.has(SESSION_COOKIE_NAME);
+
   const isPublicPath = PUBLIC_PATHS.includes(pathname);
 
   if (!isPublicPath && !hasSession) {

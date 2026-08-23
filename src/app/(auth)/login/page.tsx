@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type SubmitEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +83,12 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Create one
+            </Link>
+          </p>
         </form>
       </CardContent>
     </Card>

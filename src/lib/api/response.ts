@@ -1,19 +1,43 @@
 import { NextResponse } from "next/server";
 import type { ApiResponse } from "@/types";
 
-/** Standard "endpoint scaffolded, CRUD not implemented yet" GET response. */
-export function readyResponse(resource: string) {
-  return NextResponse.json<ApiResponse>({
-    success: true,
-    message: `${resource} API is ready. CRUD handlers are not implemented yet.`,
-    data: [],
-  });
+/** Standard success response. */
+export function SuccessResponse(
+  resource: string = "data",
+  status: number = 200,
+  data: unknown = [],
+) {
+  return NextResponse.json<ApiResponse>(
+    {
+      success: true,
+      message: `${resource} fetched successfully`,
+      data,
+      status,
+    },
+    { status },
+  );
 }
 
-/** Standard 501 response for write operations that aren't built yet. */
-export function notImplementedResponse(action: string) {
+/** Standard "not found" response. */
+export function NotFoundResponse(
+  message: string = "Data not found",
+  status: number = 404,
+  data: unknown = [],
+) {
   return NextResponse.json<ApiResponse>(
-    { success: false, message: `${action} is not implemented yet.` },
-    { status: 501 }
+    { success: false, message, data, status },
+    { status },
+  );
+}
+
+/** Standard error response (defaults to 501 for endpoints not implemented yet). */
+export function ErrorResponse(
+  message: string = "Something went wrong",
+  status: number = 501,
+  data: unknown = [],
+) {
+  return NextResponse.json<ApiResponse>(
+    { success: false, message, data, status },
+    { status },
   );
 }

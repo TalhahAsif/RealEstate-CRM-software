@@ -12,6 +12,7 @@ interface EntityPlaceholderPageProps {
   icon: LucideIcon;
   columns: string[];
   emptyDescription: string;
+  data?: unknown[];
 }
 
 /**
@@ -26,6 +27,7 @@ export function EntityPlaceholderPage({
   icon,
   columns,
   emptyDescription,
+  data = [],
 }: EntityPlaceholderPageProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -41,7 +43,7 @@ export function EntityPlaceholderPage({
       />
       <DataTable
         columns={columns.map((header) => ({ header, cell: () => null }))}
-        data={[]}
+        data={data}
         keyExtractor={() => ""}
         emptyState={
           <EmptyState
