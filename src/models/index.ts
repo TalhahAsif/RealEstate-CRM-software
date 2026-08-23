@@ -10,6 +10,7 @@ export { default as Payment } from "./Payment";
 export { default as Commission } from "./Commission";
 export { default as Document } from "./Document";
 export { default as Activity } from "./Activity";
+export { default as Session } from "./Session";
 
 export type { IUser } from "./User";
 export type { ILead } from "./Lead";
@@ -23,3 +24,4 @@ export type { IPayment } from "./Payment";
 export type { ICommission } from "./Commission";
 export type { IDocument } from "./Document";
 export type { IActivity } from "./Activity";
+export type { ISession } from "./Session";

@@ -7,3 +7,4 @@ export async function GET() {
 export async function POST() {
   return notImplementedResponse("Creating a user");
 }
+
