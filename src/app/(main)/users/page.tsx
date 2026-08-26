@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Users as UsersIcon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Users as UsersIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/shared/DataTable";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CreateUserModal } from "@/components/users/CreateUserModal";
 import { getInitials, toTitleCase } from "@/lib/utils/format";
 import type { ApiResponse } from "@/types";
 import type { IUser } from "@/models/User";
@@ -21,29 +21,24 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadUsers = useCallback(async () => {
+    try {
+      const response = await fetch("/api/users");
+      const result = (await response.json()) as ApiResponse<UserRow[]>;
 
-    async function loadUsers() {
-      try {
-        const response = await fetch("/api/users");
-        const result = (await response.json()) as ApiResponse<UserRow[]>;
-
-        if (!cancelled && result.success && result.data) {
-          setUsers(result.data);
-        }
-      } catch (error) {
-        console.error("Error fetching users:", error);
-      } finally {
-        if (!cancelled) setIsLoading(false);
+      if (result.success && result.data) {
+        setUsers(result.data);
       }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setIsLoading(false);
     }
-
-    loadUsers();
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const columns: DataTableColumn<UserRow>[] = [
     {
@@ -79,12 +74,7 @@ export default function UsersPage() {
       <PageHeader
         title="Users"
         description="Manage your team's accounts and roles."
-        action={
-          <Button disabled title="Coming soon">
-            <Plus />
-            Add User
-          </Button>
-        }
+        action={<CreateUserModal onCreated={loadUsers} />}
       />
       <DataTable
         columns={columns}

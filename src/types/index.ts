@@ -19,6 +19,7 @@ import type {
   COMMISSION_STATUSES,
   DOCUMENT_TYPES,
   DOCUMENT_ENTITY_TYPES,
+  PROPERTY_SOURCE,
 } from "@/constants";
 
 export type UserRole = (typeof USER_ROLES)[number];
@@ -30,6 +31,7 @@ export type CustomerPurpose = (typeof CUSTOMER_PURPOSES)[number];
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 export type ListingType = (typeof LISTING_TYPES)[number];
 export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
+export type PropertySource = (typeof PROPERTY_SOURCE)[number];
 export type AreaUnit = (typeof AREA_UNITS)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export type FollowUpType = (typeof FOLLOW_UP_TYPES)[number];

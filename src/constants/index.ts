@@ -45,14 +45,13 @@ export const CUSTOMER_TYPES = [
 export const CUSTOMER_PURPOSES = ["living", "investment"] as const;
 
 export const PROPERTY_TYPES = [
-  "apartment",
-  "house",
-  "plot",
+  "flat/apartment",
+  "portion",
+  "plots",
   "office",
   "shop",
-  "commercial",
-  "warehouse",
-  "other",
+  "silent-commercial",
+  "townhouse",
 ] as const;
 
 export const LISTING_TYPES = ["sale", "rent"] as const;
@@ -63,6 +62,12 @@ export const PROPERTY_STATUSES = [
   "sold",
   "rented",
   "inactive",
+] as const;
+
+export const PROPERTY_SOURCE = [
+  "direct",
+  "one_down",
+  "two_down",
 ] as const;
 
 export const AREA_UNITS = ["sqft", "sqm", "marla", "kanal", "acre"] as const;

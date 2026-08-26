@@ -18,3 +18,7 @@ export const customerSchema = z.object({
 });
 
 export type CustomerInput = z.infer<typeof customerSchema>;
+
+export const customerUpdateSchema = customerSchema.partial();
+
+export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;

@@ -5,7 +5,7 @@ import {
   PROPERTY_STATUSES,
   AREA_UNITS,
 } from "@/constants";
-import type { PropertyType, ListingType, PropertyStatus, AreaUnit } from "@/types";
+import type { PropertyType, ListingType, PropertyStatus, AreaUnit, PropertySource } from "@/types";
 
 export interface IProperty extends Document {
   propertyId: string;
@@ -31,6 +31,7 @@ export interface IProperty extends Document {
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
+  source: PropertySource;
 }
 
 const PropertySchema = new Schema<IProperty>(

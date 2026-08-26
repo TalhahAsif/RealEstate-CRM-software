@@ -24,3 +24,7 @@ export const leadSchema = z.object({
 });
 
 export type LeadInput = z.infer<typeof leadSchema>;
+
+export const leadUpdateSchema = leadSchema.partial();
+
+export type LeadUpdateInput = z.infer<typeof leadUpdateSchema>;
