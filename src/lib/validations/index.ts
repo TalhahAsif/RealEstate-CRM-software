@@ -5,3 +5,5 @@ export * from "./property";
 export * from "./project";
 export * from "./follow-up";
 export * from "./payment";
+export * from "./deal";
+export * from "./document";

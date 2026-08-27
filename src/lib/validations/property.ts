@@ -7,15 +7,15 @@ import {
 } from "@/constants";
 
 export const propertySchema = z.object({
-  propertyId: z.string().min(1, "Property ID is required"),
+  propertyId: z.string().optional(),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   propertyType: z.enum(PROPERTY_TYPES),
   listingType: z.enum(LISTING_TYPES),
-  status: z.enum(PROPERTY_STATUSES),
+  status: z.enum(PROPERTY_STATUSES).default("available"),
   price: z.number().min(0, "Price must be a positive number"),
   area: z.number().min(0).optional(),
-  areaUnit: z.enum(AREA_UNITS),
+  areaUnit: z.enum(AREA_UNITS).default("sqft"),
   bedrooms: z.number().min(0).optional(),
   bathrooms: z.number().min(0).optional(),
   floor: z.string().optional(),
@@ -31,3 +31,8 @@ export const propertySchema = z.object({
 });
 
 export type PropertyInput = z.infer<typeof propertySchema>;
+
+export const propertyUpdateSchema = propertySchema.partial();
+
+export type PropertyUpdateInput = z.infer<typeof propertyUpdateSchema>;
+
