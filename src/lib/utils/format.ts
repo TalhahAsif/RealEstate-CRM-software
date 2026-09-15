@@ -1,10 +1,13 @@
-/** Formats a number as a currency string, e.g. 1250000 -> "$1,250,000". */
-export function formatCurrency(value: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
+import { fromRupees } from "./currency";
+
+/** Formats a rupee amount using lac/cr, e.g. 3500000 -> "Rs 35 Lac", 35000000 -> "Rs 3.5 Cr". */
+export function formatCurrency(value?: number | null): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (Math.abs(value) < 100_000) {
+    return `Rs ${value.toLocaleString("en-IN")}`;
+  }
+  const { amount, unit } = fromRupees(value);
+  return `Rs ${amount} ${unit === "cr" ? "Cr" : "Lac"}`;
 }
 
 /** Formats a date as "Jan 5, 2026". */

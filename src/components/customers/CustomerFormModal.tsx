@@ -20,15 +20,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CUSTOMER_TYPES, CUSTOMER_PURPOSES } from "@/constants";
+import {
+  CUSTOMER_TYPES,
+  CUSTOMER_PURPOSES,
+  CUSTOMER_STATUSES,
+  POSSESSION_TYPES,
+  ACQUISITION_TYPES,
+  PROPERTY_TYPES,
+} from "@/constants";
 import { toTitleCase } from "@/lib/utils/format";
+import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
+import { AmountInput } from "@/components/shared/AmountInput";
 import type { ApiResponse } from "@/types";
 import type { ICustomer } from "@/models/Customer";
 import type { IUser } from "@/models/User";
 
 export type CustomerRow = Pick<
   ICustomer,
-  "firstName" | "lastName" | "email" | "phone" | "type" | "purpose" | "budgetMin" | "budgetMax" | "bedrooms" | "notes"
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "phone"
+  | "type"
+  | "status"
+  | "purpose"
+  | "budgetMin"
+  | "budgetMax"
+  | "bedrooms"
+  | "notes"
+  | "acquisitionType"
+  | "brokerName"
+  | "brokerAgency"
+  | "brokerPhone"
+  | "preferredLocations"
+  | "preferredPropertyTypes"
+  | "possessionType"
+  | "possessionDate"
 > & {
   _id: string;
   assignedAgent?: { _id: string; firstName: string; lastName: string } | null;
@@ -42,10 +69,21 @@ interface FormState {
   email: string;
   phone: string;
   type: ICustomer["type"];
+  status: ICustomer["status"];
   purpose: ICustomer["purpose"] | "";
-  budgetMin: string;
-  budgetMax: string;
+  acquisitionType: ICustomer["acquisitionType"];
+  brokerName: string;
+  brokerAgency: string;
+  brokerPhone: string;
+  budgetMinAmount: string;
+  budgetMinUnit: CurrencyUnit;
+  budgetMaxAmount: string;
+  budgetMaxUnit: CurrencyUnit;
   bedrooms: string;
+  preferredLocations: string;
+  preferredPropertyTypes: string[];
+  possessionType: ICustomer["possessionType"] | "";
+  possessionDate: string;
   assignedAgent: string;
   notes: string;
 }
@@ -58,16 +96,36 @@ const initialFormState: FormState = {
   email: "",
   phone: "",
   type: "buyer",
+  status: "active",
   purpose: "",
-  budgetMin: "",
-  budgetMax: "",
+  acquisitionType: "direct",
+  brokerName: "",
+  brokerAgency: "",
+  brokerPhone: "",
+  budgetMinAmount: "",
+  budgetMinUnit: "lac",
+  budgetMaxAmount: "",
+  budgetMaxUnit: "lac",
   bedrooms: "",
+  preferredLocations: "",
+  preferredPropertyTypes: [],
+  possessionType: "",
+  possessionDate: "",
   assignedAgent: UNASSIGNED,
   notes: "",
 };
 
+function toDateInput(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function toFormState(customer?: CustomerRow | null): FormState {
   if (!customer) return initialFormState;
+
+  const budgetMin = fromRupees(customer.budgetMin);
+  const budgetMax = fromRupees(customer.budgetMax);
 
   return {
     firstName: customer.firstName,
@@ -75,10 +133,21 @@ function toFormState(customer?: CustomerRow | null): FormState {
     email: customer.email ?? "",
     phone: customer.phone,
     type: customer.type,
+    status: customer.status ?? "active",
     purpose: customer.purpose ?? "",
-    budgetMin: customer.budgetMin != null ? String(customer.budgetMin) : "",
-    budgetMax: customer.budgetMax != null ? String(customer.budgetMax) : "",
+    acquisitionType: customer.acquisitionType ?? "direct",
+    brokerName: customer.brokerName ?? "",
+    brokerAgency: customer.brokerAgency ?? "",
+    brokerPhone: customer.brokerPhone ?? "",
+    budgetMinAmount: budgetMin.amount,
+    budgetMinUnit: budgetMin.unit,
+    budgetMaxAmount: budgetMax.amount,
+    budgetMaxUnit: budgetMax.unit,
     bedrooms: customer.bedrooms != null ? String(customer.bedrooms) : "",
+    preferredLocations: (customer.preferredLocations ?? []).join(", "),
+    preferredPropertyTypes: customer.preferredPropertyTypes ?? [],
+    possessionType: customer.possessionType ?? "",
+    possessionDate: customer.possessionDate ? toDateInput(customer.possessionDate) : "",
     assignedAgent: customer.assignedAgent?._id ?? UNASSIGNED,
     notes: customer.notes ?? "",
   };
@@ -152,10 +221,25 @@ export function CustomerFormModal({
       email: form.email || undefined,
       phone: form.phone,
       type: form.type,
+      status: form.status,
       purpose: form.purpose || undefined,
-      budgetMin: form.budgetMin ? Number(form.budgetMin) : undefined,
-      budgetMax: form.budgetMax ? Number(form.budgetMax) : undefined,
+      acquisitionType: form.acquisitionType,
+      brokerName: form.acquisitionType === "broker" ? form.brokerName || undefined : undefined,
+      brokerAgency: form.acquisitionType === "broker" ? form.brokerAgency || undefined : undefined,
+      brokerPhone: form.acquisitionType === "broker" ? form.brokerPhone || undefined : undefined,
+      budgetMin: toRupees(form.budgetMinAmount, form.budgetMinUnit),
+      budgetMax: toRupees(form.budgetMaxAmount, form.budgetMaxUnit),
       bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
+      preferredLocations: form.preferredLocations
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean),
+      preferredPropertyTypes: form.preferredPropertyTypes,
+      possessionType: form.possessionType || undefined,
+      possessionDate:
+        form.possessionType === "by_date" && form.possessionDate
+          ? new Date(form.possessionDate).toISOString()
+          : undefined,
       assignedAgent: form.assignedAgent === UNASSIGNED ? undefined : form.assignedAgent,
       notes: form.notes || undefined,
     };
@@ -194,7 +278,7 @@ export function CustomerFormModal({
           <DialogDescription>
             {isEdit
               ? "Update this customer's details."
-              : "Add a buyer, seller, landlord, or tenant."}
+              : "Add a buyer, investor, or renter."}
           </DialogDescription>
         </DialogHeader>
         <form className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto p-4 pt-0" onSubmit={handleSubmit}>
@@ -224,6 +308,68 @@ export function CustomerFormModal({
               />
             </div>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="acquisitionType">Sourced</Label>
+            <Select
+              value={form.acquisitionType}
+              onValueChange={(value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  acquisitionType: value as ICustomer["acquisitionType"],
+                }))
+              }
+            >
+              <SelectTrigger id="acquisitionType" className="w-full">
+                <SelectValue placeholder="Direct or through broker" />
+              </SelectTrigger>
+              <SelectContent>
+                {ACQUISITION_TYPES.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "direct" ? "Direct" : "Through Broker"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {form.acquisitionType === "broker" && (
+            <div className="grid grid-cols-3 gap-3 rounded-lg border border-input p-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="brokerName">Broker name</Label>
+                <Input
+                  id="brokerName"
+                  placeholder="Broker's name"
+                  required
+                  value={form.brokerName}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, brokerName: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="brokerAgency">Agency name</Label>
+                <Input
+                  id="brokerAgency"
+                  placeholder="Agency name"
+                  value={form.brokerAgency}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, brokerAgency: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="brokerPhone">Broker number</Label>
+                <Input
+                  id="brokerPhone"
+                  type="tel"
+                  placeholder="+1 555 123 4567"
+                  value={form.brokerPhone}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, brokerPhone: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="phone">Phone</Label>
@@ -294,6 +440,26 @@ export function CustomerFormModal({
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="status">Status</Label>
+            <Select
+              value={form.status}
+              onValueChange={(value) =>
+                setForm((prev) => ({ ...prev, status: value as ICustomer["status"] }))
+              }
+            >
+              <SelectTrigger id="status" className="w-full">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {CUSTOMER_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {toTitleCase(status)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="assignedAgent">Agent (optional)</Label>
             <Select
               value={form.assignedAgent}
@@ -312,43 +478,108 @@ export function CustomerFormModal({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="budgetMin">Budget min</Label>
-              <Input
-                id="budgetMin"
-                type="number"
-                min={0}
-                value={form.budgetMin}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, budgetMin: event.target.value }))
-                }
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <AmountInput
+              id="budgetMin"
+              label="Budget min"
+              amount={form.budgetMinAmount}
+              unit={form.budgetMinUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, budgetMinAmount: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, budgetMinUnit: value }))}
+            />
+            <AmountInput
+              id="budgetMax"
+              label="Budget max"
+              amount={form.budgetMaxAmount}
+              unit={form.budgetMaxUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, budgetMaxAmount: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, budgetMaxUnit: value }))}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bedrooms">Bedrooms</Label>
+            <Input
+              id="bedrooms"
+              type="number"
+              min={0}
+              className="max-w-32"
+              value={form.bedrooms}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, bedrooms: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="preferredLocations">Preferred locations (comma separated)</Label>
+            <Input
+              id="preferredLocations"
+              placeholder="Downtown, DHA Phase 6"
+              value={form.preferredLocations}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, preferredLocations: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Preferred property types</Label>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {PROPERTY_TYPES.map((propertyType) => (
+                <label key={propertyType} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.preferredPropertyTypes.includes(propertyType)}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        preferredPropertyTypes: event.target.checked
+                          ? [...prev.preferredPropertyTypes, propertyType]
+                          : prev.preferredPropertyTypes.filter((t) => t !== propertyType),
+                      }))
+                    }
+                  />
+                  {toTitleCase(propertyType)}
+                </label>
+              ))}
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="budgetMax">Budget max</Label>
-              <Input
-                id="budgetMax"
-                type="number"
-                min={0}
-                value={form.budgetMax}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, budgetMax: event.target.value }))
+              <Label htmlFor="possessionType">Possession needed (optional)</Label>
+              <Select
+                value={form.possessionType || undefined}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    possessionType: value as ICustomer["possessionType"],
+                  }))
                 }
-              />
+              >
+                <SelectTrigger id="possessionType" className="w-full">
+                  <SelectValue placeholder="Select possession" />
+                </SelectTrigger>
+                <SelectContent>
+                  {POSSESSION_TYPES.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option === "ready_to_move" ? "Ready to Move" : "Possession by Date"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="bedrooms">Bedrooms</Label>
-              <Input
-                id="bedrooms"
-                type="number"
-                min={0}
-                value={form.bedrooms}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, bedrooms: event.target.value }))
-                }
-              />
-            </div>
+            {form.possessionType === "by_date" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="possessionDate">Possession date</Label>
+                <Input
+                  id="possessionDate"
+                  type="date"
+                  required
+                  value={form.possessionDate}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, possessionDate: event.target.value }))
+                  }
+                />
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Notes (optional)</Label>

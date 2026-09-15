@@ -19,7 +19,6 @@ export async function GET(_request: Request, { params }: RouteContext) {
   try {
     await connectToDatabase();
     const property = await Property.findById(id)
-      .populate("owner", "firstName lastName email phone")
       .populate("assignedAgent", "firstName lastName email")
       .populate("project", "name location")
       .lean();
@@ -54,7 +53,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       returnDocument: "after",
       runValidators: true,
     })
-      .populate("owner", "firstName lastName email phone")
       .populate("assignedAgent", "firstName lastName email")
       .populate("project", "name location")
       .lean();

@@ -7,11 +7,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export interface DataTableColumn<T> {
   header: string;
   cell: (row: T) => ReactNode;
   className?: string;
+  /** Clicks inside this column won't trigger onRowClick, e.g. an actions menu. */
+  stopRowClick?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -19,9 +22,16 @@ interface DataTableProps<T> {
   data: T[];
   keyExtractor: (row: T) => string;
   emptyState?: ReactNode;
+  onRowClick?: (row: T) => void;
 }
 
-export function DataTable<T>({ columns, data, keyExtractor, emptyState }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  data,
+  keyExtractor,
+  emptyState,
+  onRowClick,
+}: DataTableProps<T>) {
   return (
     <div className="overflow-x-auto rounded-lg border">
       <Table>
@@ -43,9 +53,17 @@ export function DataTable<T>({ columns, data, keyExtractor, emptyState }: DataTa
             </TableRow>
           ) : (
             data.map((row) => (
-              <TableRow key={keyExtractor(row)}>
+              <TableRow
+                key={keyExtractor(row)}
+                className={cn(onRowClick && "cursor-pointer")}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
                 {columns.map((column) => (
-                  <TableCell key={column.header} className={column.className}>
+                  <TableCell
+                    key={column.header}
+                    className={column.className}
+                    onClick={column.stopRowClick ? (event) => event.stopPropagation() : undefined}
+                  >
                     {column.cell(row)}
                   </TableCell>
                 ))}

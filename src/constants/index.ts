@@ -34,15 +34,15 @@ export const LEAD_STATUSES = [
 
 export const LEAD_PRIORITIES = ["hot", "warm", "cold"] as const;
 
-export const CUSTOMER_TYPES = [
-  "buyer",
-  "seller",
-  "landlord",
-  "tenant",
-  "investor",
-] as const;
+export const CUSTOMER_TYPES = ["buyer", "investor", "for_rent"] as const;
 
 export const CUSTOMER_PURPOSES = ["living", "investment"] as const;
+
+export const CUSTOMER_STATUSES = ["active", "purchased", "rented", "on_hold"] as const;
+
+export const POSSESSION_TYPES = ["ready_to_move", "by_date"] as const;
+
+export const ACQUISITION_TYPES = ["direct", "broker"] as const;
 
 export const PROPERTY_TYPES = [
   "flat/apartment",
@@ -52,6 +52,16 @@ export const PROPERTY_TYPES = [
   "shop",
   "silent-commercial",
   "townhouse",
+  "bungalow",
+] as const;
+
+/** Property types that have bedrooms; plots/offices/shops don't. */
+export const BEDROOM_PROPERTY_TYPES = [
+  "flat/apartment",
+  "portion",
+  "silent-commercial",
+  "townhouse",
+  "bungalow",
 ] as const;
 
 export const LISTING_TYPES = ["sale", "rent"] as const;
@@ -59,9 +69,20 @@ export const LISTING_TYPES = ["sale", "rent"] as const;
 export const PROPERTY_STATUSES = [
   "available",
   "reserved",
+  "on_hold",
   "sold",
   "rented",
   "inactive",
+] as const;
+
+export const PROPERTY_FACING = ["west", "cross_west", "east"] as const;
+
+/** Common boolean features, stored as tags inside a property's `amenities` list. */
+export const PROPERTY_FEATURES = [
+  "servant_quarter",
+  "powder_washroom",
+  "standby_generator",
+  "lift",
 ] as const;
 
 export const PROPERTY_SOURCE = [
@@ -70,7 +91,16 @@ export const PROPERTY_SOURCE = [
   "two_down",
 ] as const;
 
-export const AREA_UNITS = ["sqft", "sqm", "marla", "kanal", "acre"] as const;
+export const AREA_UNITS = ["sqft", "sqyd", "sqm", "marla", "kanal", "acre"] as const;
+
+export const PROPERTY_CONDITIONS = [
+  "furnished",
+  "semi_furnished",
+  "builder_condition",
+  "well_maintained",
+  "renovated",
+  "other",
+] as const;
 
 export const PROJECT_STATUSES = [
   "upcoming",

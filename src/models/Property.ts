@@ -4,8 +4,19 @@ import {
   LISTING_TYPES,
   PROPERTY_STATUSES,
   AREA_UNITS,
+  ACQUISITION_TYPES,
+  PROPERTY_CONDITIONS,
+  PROPERTY_FACING,
 } from "@/constants";
-import type { PropertyType, ListingType, PropertyStatus, AreaUnit, PropertySource } from "@/types";
+import type {
+  PropertyType,
+  ListingType,
+  PropertyStatus,
+  AreaUnit,
+  AcquisitionType,
+  PropertyCondition,
+  PropertyFacing,
+} from "@/types";
 
 export interface IProperty extends Document {
   propertyId: string;
@@ -25,13 +36,20 @@ export interface IProperty extends Document {
   location?: string;
   amenities: string[];
   images: string[];
-  owner?: Types.ObjectId;
+  ownerName?: string;
+  ownerPhone?: string;
   assignedAgent?: Types.ObjectId;
   project?: Types.ObjectId;
   notes?: string;
+  acquisitionType: AcquisitionType;
+  brokerName?: string;
+  brokerAgency?: string;
+  brokerPhone?: string;
+  condition?: PropertyCondition;
+  conditionOther?: string;
+  facing?: PropertyFacing;
   createdAt: Date;
   updatedAt: Date;
-  source: PropertySource;
 }
 
 const PropertySchema = new Schema<IProperty>(
@@ -53,10 +71,18 @@ const PropertySchema = new Schema<IProperty>(
     location: { type: String, trim: true },
     amenities: [{ type: String, trim: true }],
     images: [{ type: String }],
-    owner: { type: Schema.Types.ObjectId, ref: "Customer" },
+    ownerName: { type: String, trim: true },
+    ownerPhone: { type: String, trim: true },
     assignedAgent: { type: Schema.Types.ObjectId, ref: "User" },
     project: { type: Schema.Types.ObjectId, ref: "Project" },
     notes: { type: String },
+    acquisitionType: { type: String, enum: ACQUISITION_TYPES, default: "direct" },
+    brokerName: { type: String, trim: true },
+    brokerAgency: { type: String, trim: true },
+    brokerPhone: { type: String, trim: true },
+    condition: { type: String, enum: PROPERTY_CONDITIONS },
+    conditionOther: { type: String, trim: true },
+    facing: { type: String, enum: PROPERTY_FACING },
   },
   { timestamps: true }
 );

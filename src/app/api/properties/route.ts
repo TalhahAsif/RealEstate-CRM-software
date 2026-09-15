@@ -10,7 +10,6 @@ export async function GET() {
     await connectToDatabase();
     const properties = await Property.find()
       .sort({ createdAt: -1 })
-      .populate("owner", "firstName lastName email phone")
       .populate("assignedAgent", "firstName lastName email")
       .populate("project", "name location")
       .lean();

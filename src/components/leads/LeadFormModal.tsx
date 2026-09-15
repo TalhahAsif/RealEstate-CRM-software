@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { LEAD_SOURCES, LEAD_STATUSES, LEAD_PRIORITIES } from "@/constants";
 import { toTitleCase } from "@/lib/utils/format";
+import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
+import { AmountInput } from "@/components/shared/AmountInput";
 import type { ApiResponse } from "@/types";
 import type { ILead } from "@/models/Lead";
 import type { IUser } from "@/models/User";
@@ -45,8 +47,10 @@ interface FormState {
   status: ILead["status"];
   priority: ILead["priority"];
   assignedTo: string;
-  budgetMin: string;
-  budgetMax: string;
+  budgetMinAmount: string;
+  budgetMinUnit: CurrencyUnit;
+  budgetMaxAmount: string;
+  budgetMaxUnit: CurrencyUnit;
   notes: string;
 }
 
@@ -61,13 +65,18 @@ const initialFormState: FormState = {
   status: "new",
   priority: "warm",
   assignedTo: UNASSIGNED,
-  budgetMin: "",
-  budgetMax: "",
+  budgetMinAmount: "",
+  budgetMinUnit: "lac",
+  budgetMaxAmount: "",
+  budgetMaxUnit: "lac",
   notes: "",
 };
 
 function toFormState(lead?: LeadRow | null): FormState {
   if (!lead) return initialFormState;
+
+  const budgetMin = fromRupees(lead.budgetMin);
+  const budgetMax = fromRupees(lead.budgetMax);
 
   return {
     firstName: lead.firstName,
@@ -78,8 +87,10 @@ function toFormState(lead?: LeadRow | null): FormState {
     status: lead.status,
     priority: lead.priority,
     assignedTo: lead.assignedTo?._id ?? UNASSIGNED,
-    budgetMin: lead.budgetMin != null ? String(lead.budgetMin) : "",
-    budgetMax: lead.budgetMax != null ? String(lead.budgetMax) : "",
+    budgetMinAmount: budgetMin.amount,
+    budgetMinUnit: budgetMin.unit,
+    budgetMaxAmount: budgetMax.amount,
+    budgetMaxUnit: budgetMax.unit,
     notes: lead.notes ?? "",
   };
 }
@@ -155,8 +166,8 @@ export function LeadFormModal({
       status: form.status,
       priority: form.priority,
       assignedTo: form.assignedTo === UNASSIGNED ? undefined : form.assignedTo,
-      budgetMin: form.budgetMin ? Number(form.budgetMin) : undefined,
-      budgetMax: form.budgetMax ? Number(form.budgetMax) : undefined,
+      budgetMin: toRupees(form.budgetMinAmount, form.budgetMinUnit),
+      budgetMax: toRupees(form.budgetMaxAmount, form.budgetMaxUnit),
       notes: form.notes || undefined,
     };
 
@@ -328,30 +339,22 @@ export function LeadFormModal({
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="budgetMin">Budget min (optional)</Label>
-              <Input
-                id="budgetMin"
-                type="number"
-                min={0}
-                value={form.budgetMin}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, budgetMin: event.target.value }))
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="budgetMax">Budget max (optional)</Label>
-              <Input
-                id="budgetMax"
-                type="number"
-                min={0}
-                value={form.budgetMax}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, budgetMax: event.target.value }))
-                }
-              />
-            </div>
+            <AmountInput
+              id="budgetMin"
+              label="Budget min (optional)"
+              amount={form.budgetMinAmount}
+              unit={form.budgetMinUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, budgetMinAmount: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, budgetMinUnit: value }))}
+            />
+            <AmountInput
+              id="budgetMax"
+              label="Budget max (optional)"
+              amount={form.budgetMaxAmount}
+              unit={form.budgetMaxUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, budgetMaxAmount: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, budgetMaxUnit: value }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Notes (optional)</Label>

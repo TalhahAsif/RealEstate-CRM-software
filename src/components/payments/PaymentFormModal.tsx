@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { PAYMENT_METHODS, PAYMENT_STATUSES } from "@/constants";
 import { formatCurrency, toTitleCase } from "@/lib/utils/format";
+import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
+import { AmountInput } from "@/components/shared/AmountInput";
 import type { ApiResponse } from "@/types";
 import type { IPayment } from "@/models/Payment";
 
@@ -43,7 +45,8 @@ type DealOption = {
 
 interface FormState {
   deal: string;
-  amount: string;
+  amountValue: string;
+  amountUnit: CurrencyUnit;
   paymentMethod: IPayment["paymentMethod"];
   paymentDate: string;
   reference: string;
@@ -59,7 +62,8 @@ function toDateInput(date: Date | string): string {
 
 const initialFormState: FormState = {
   deal: "",
-  amount: "",
+  amountValue: "",
+  amountUnit: "lac",
   paymentMethod: "bank_transfer",
   paymentDate: "",
   reference: "",
@@ -70,9 +74,12 @@ const initialFormState: FormState = {
 function toFormState(payment?: PaymentRow | null): FormState {
   if (!payment) return initialFormState;
 
+  const amount = fromRupees(payment.amount);
+
   return {
     deal: payment.deal?._id ?? "",
-    amount: String(payment.amount),
+    amountValue: amount.amount,
+    amountUnit: amount.unit,
     paymentMethod: payment.paymentMethod,
     paymentDate: toDateInput(payment.paymentDate),
     reference: payment.reference ?? "",
@@ -153,7 +160,7 @@ export function PaymentFormModal({
     const payload = {
       deal: form.deal || undefined,
       customer: selectedDeal?.customer?._id ?? payment?.customer?._id,
-      amount: form.amount ? Number(form.amount) : undefined,
+      amount: toRupees(form.amountValue, form.amountUnit),
       paymentMethod: form.paymentMethod,
       paymentDate: form.paymentDate ? new Date(form.paymentDate).toISOString() : undefined,
       reference: form.reference || undefined,
@@ -216,19 +223,15 @@ export function PaymentFormModal({
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="amount">Amount</Label>
-              <Input
-                id="amount"
-                type="number"
-                min={0}
-                required
-                value={form.amount}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, amount: event.target.value }))
-                }
-              />
-            </div>
+            <AmountInput
+              id="amount"
+              label="Amount"
+              required
+              amount={form.amountValue}
+              unit={form.amountUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, amountValue: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, amountUnit: value }))}
+            />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="paymentDate">Payment date</Label>
               <Input

@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { DEAL_STAGES } from "@/constants";
 import { toTitleCase } from "@/lib/utils/format";
+import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
+import { AmountInput } from "@/components/shared/AmountInput";
 import type { ApiResponse, DealStage } from "@/types";
 import type { IDeal } from "@/models/Deal";
 
@@ -65,9 +67,11 @@ interface FormState {
   property: string;
   agent: string;
   stage: DealStage;
-  dealAmount: string;
+  dealAmountValue: string;
+  dealAmountUnit: CurrencyUnit;
   commissionPercentage: string;
-  commissionAmount: string;
+  commissionAmountValue: string;
+  commissionAmountUnit: CurrencyUnit;
   notes: string;
 }
 
@@ -77,14 +81,19 @@ const initialFormState: FormState = {
   property: "",
   agent: "",
   stage: "property_selected",
-  dealAmount: "",
+  dealAmountValue: "",
+  dealAmountUnit: "lac",
   commissionPercentage: "",
-  commissionAmount: "",
+  commissionAmountValue: "",
+  commissionAmountUnit: "lac",
   notes: "",
 };
 
 function toFormState(deal?: DealRow | null): FormState {
   if (!deal) return initialFormState;
+
+  const dealAmount = fromRupees(deal.dealAmount);
+  const commissionAmount = fromRupees(deal.commissionAmount);
 
   return {
     dealNumber: deal.dealNumber ?? "",
@@ -92,9 +101,11 @@ function toFormState(deal?: DealRow | null): FormState {
     property: deal.property?._id ?? "",
     agent: deal.agent?._id ?? "",
     stage: deal.stage ?? "property_selected",
-    dealAmount: deal.dealAmount != null ? String(deal.dealAmount) : "",
+    dealAmountValue: dealAmount.amount,
+    dealAmountUnit: dealAmount.unit,
     commissionPercentage: deal.commissionPercentage != null ? String(deal.commissionPercentage) : "",
-    commissionAmount: deal.commissionAmount != null ? String(deal.commissionAmount) : "",
+    commissionAmountValue: commissionAmount.amount,
+    commissionAmountUnit: commissionAmount.unit,
     notes: deal.notes ?? "",
   };
 }
@@ -169,29 +180,28 @@ export function DealFormModal({
   // When property changes in form, pre-fill deal amount with property price if blank
   function handlePropertySelect(propId: string) {
     const selectedProp = properties.find((p) => p._id === propId);
-    setForm((prev) => ({
-      ...prev,
-      property: propId,
-      dealAmount: selectedProp && !prev.dealAmount ? String(selectedProp.price) : prev.dealAmount,
-    }));
+    setForm((prev) => {
+      if (!selectedProp || prev.dealAmountValue) {
+        return { ...prev, property: propId };
+      }
+      const prefill = fromRupees(selectedProp.price);
+      return { ...prev, property: propId, dealAmountValue: prefill.amount, dealAmountUnit: prefill.unit };
+    });
   }
 
-  // Auto-calculate commission amount when percentage or deal amount changes
-  function handleAmountOrPctChange(amountStr: string, pctStr: string) {
-    const amt = Number(amountStr);
+  // Auto-calculate commission amount when the deal amount, its unit, or the percentage changes
+  function recomputeCommission(
+    dealAmountValue: string,
+    dealAmountUnit: CurrencyUnit,
+    pctStr: string
+  ): { commissionAmountValue: string; commissionAmountUnit: CurrencyUnit } | null {
+    const dealRaw = toRupees(dealAmountValue, dealAmountUnit);
     const pct = Number(pctStr);
-    let commStr = form.commissionAmount;
 
-    if (!isNaN(amt) && !isNaN(pct) && pctStr !== "") {
-      commStr = String((amt * pct) / 100);
-    }
+    if (dealRaw == null || Number.isNaN(pct) || pctStr === "") return null;
 
-    setForm((prev) => ({
-      ...prev,
-      dealAmount: amountStr,
-      commissionPercentage: pctStr,
-      commissionAmount: commStr,
-    }));
+    const commission = fromRupees((dealRaw * pct) / 100);
+    return { commissionAmountValue: commission.amount, commissionAmountUnit: commission.unit };
   }
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -205,9 +215,9 @@ export function DealFormModal({
       property: form.property,
       agent: form.agent,
       stage: form.stage,
-      dealAmount: Number(form.dealAmount),
+      dealAmount: toRupees(form.dealAmountValue, form.dealAmountUnit) ?? 0,
       commissionPercentage: form.commissionPercentage ? Number(form.commissionPercentage) : undefined,
-      commissionAmount: form.commissionAmount ? Number(form.commissionAmount) : undefined,
+      commissionAmount: toRupees(form.commissionAmountValue, form.commissionAmountUnit),
       notes: form.notes || undefined,
     };
 
@@ -335,19 +345,28 @@ export function DealFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="dealAmount">Deal Amount</Label>
-              <Input
-                id="dealAmount"
-                type="number"
-                min={0}
-                required
-                placeholder="500000"
-                value={form.dealAmount}
-                onChange={(e) => handleAmountOrPctChange(e.target.value, form.commissionPercentage)}
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <AmountInput
+              id="dealAmount"
+              label="Deal Amount"
+              required
+              amount={form.dealAmountValue}
+              unit={form.dealAmountUnit}
+              onAmountChange={(value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  dealAmountValue: value,
+                  ...(recomputeCommission(value, prev.dealAmountUnit, prev.commissionPercentage) ?? {}),
+                }))
+              }
+              onUnitChange={(value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  dealAmountUnit: value,
+                  ...(recomputeCommission(prev.dealAmountValue, value, prev.commissionPercentage) ?? {}),
+                }))
+              }
+            />
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="commissionPercentage">Commission %</Label>
@@ -359,21 +378,24 @@ export function DealFormModal({
                 max={100}
                 placeholder="2.5"
                 value={form.commissionPercentage}
-                onChange={(e) => handleAmountOrPctChange(form.dealAmount, e.target.value)}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    commissionPercentage: e.target.value,
+                    ...(recomputeCommission(prev.dealAmountValue, prev.dealAmountUnit, e.target.value) ?? {}),
+                  }))
+                }
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="commissionAmount">Commission ($)</Label>
-              <Input
-                id="commissionAmount"
-                type="number"
-                min={0}
-                placeholder="12500"
-                value={form.commissionAmount}
-                onChange={(e) => setForm((prev) => ({ ...prev, commissionAmount: e.target.value }))}
-              />
-            </div>
+            <AmountInput
+              id="commissionAmount"
+              label="Commission"
+              amount={form.commissionAmountValue}
+              unit={form.commissionAmountUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, commissionAmountValue: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, commissionAmountUnit: value }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Building, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building, Eye, MoreHorizontal, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/shared/DataTable";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -11,21 +13,27 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PropertyFormModal, type PropertyRow } from "@/components/properties/PropertyFormModal";
 import { formatCurrency, toTitleCase } from "@/lib/utils/format";
+import { PROPERTY_STATUSES } from "@/constants";
 import type { ApiResponse, PropertyStatus } from "@/types";
 
 const STATUS_BADGE_VARIANT: Record<PropertyStatus, "default" | "secondary" | "outline" | "destructive"> = {
   available: "default",
   reserved: "secondary",
+  on_hold: "secondary",
   sold: "outline",
   rented: "outline",
   inactive: "destructive",
 };
 
 export default function PropertiesPage() {
+  const router = useRouter();
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProperty, setEditingProperty] = useState<PropertyRow | null>(null);
@@ -49,6 +57,26 @@ export default function PropertiesPage() {
   useEffect(() => {
     loadProperties();
   }, [loadProperties]);
+
+  async function handleStatusChange(property: PropertyRow, status: PropertyStatus) {
+    try {
+      const response = await fetch(`/api/properties/${property._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const result = (await response.json()) as ApiResponse;
+
+      if (!response.ok || !result.success) {
+        alert(result.message || "Unable to update property status");
+        return;
+      }
+
+      await loadProperties();
+    } catch {
+      alert("Something went wrong. Please try again.");
+    }
+  }
 
   async function handleDelete(property: PropertyRow) {
     if (!window.confirm(`Delete property "${property.title}"? This cannot be undone.`)) {
@@ -124,6 +152,7 @@ export default function PropertiesPage() {
     {
       header: "",
       className: "w-10",
+      stopRowClick: true,
       cell: (property) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -133,10 +162,33 @@ export default function PropertiesPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href={`/properties/${property._id}`}>
+                <Eye />
+                View
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setEditingProperty(property)}>
               <Pencil />
               Edit
             </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Tag />
+                Mark as
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {PROPERTY_STATUSES.map((status) => (
+                  <DropdownMenuItem
+                    key={status}
+                    disabled={property.status === status}
+                    onSelect={() => handleStatusChange(property, status)}
+                  >
+                    {toTitleCase(status)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuItem variant="destructive" onSelect={() => handleDelete(property)}>
               <Trash2 />
               Delete
@@ -168,6 +220,7 @@ export default function PropertiesPage() {
         columns={columns}
         data={properties}
         keyExtractor={(p) => p._id}
+        onRowClick={(property) => router.push(`/properties/${property._id}`)}
         emptyState={
           !isLoading ? (
             <EmptyState

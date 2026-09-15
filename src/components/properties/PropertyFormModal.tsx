@@ -25,8 +25,17 @@ import {
   LISTING_TYPES,
   PROPERTY_STATUSES,
   AREA_UNITS,
+  ACQUISITION_TYPES,
+  PROPERTY_CONDITIONS,
+  PROPERTY_FACING,
+  PROPERTY_FEATURES,
 } from "@/constants";
 import { toTitleCase } from "@/lib/utils/format";
+import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
+import { hasBedrooms } from "@/lib/utils/property";
+import { AmountInput } from "@/components/shared/AmountInput";
+import { Badge } from "@/components/ui/badge";
+import { X } from "lucide-react";
 import type { ApiResponse, PropertyType, ListingType, PropertyStatus, AreaUnit } from "@/types";
 import type { IProperty } from "@/models/Property";
 
@@ -50,18 +59,20 @@ export type PropertyRow = Pick<
   | "amenities"
   | "images"
   | "notes"
+  | "acquisitionType"
+  | "brokerName"
+  | "brokerAgency"
+  | "brokerPhone"
+  | "ownerName"
+  | "ownerPhone"
+  | "condition"
+  | "conditionOther"
+  | "facing"
 > & {
   _id: string;
-  owner?: { _id: string; firstName: string; lastName: string } | null;
   assignedAgent?: { _id: string; firstName: string; lastName: string } | null;
   project?: { _id: string; name: string } | null;
 };
-
-interface CustomerOption {
-  _id: string;
-  firstName: string;
-  lastName: string;
-}
 
 interface AgentOption {
   _id: string;
@@ -81,7 +92,8 @@ interface FormState {
   propertyType: PropertyType;
   listingType: ListingType;
   status: PropertyStatus;
-  price: string;
+  priceAmount: string;
+  priceUnit: CurrencyUnit;
   area: string;
   areaUnit: AreaUnit;
   bedrooms: string;
@@ -90,10 +102,20 @@ interface FormState {
   address: string;
   city: string;
   location: string;
-  owner: string;
+  ownerName: string;
+  ownerPhone: string;
   assignedAgent: string;
   project: string;
   notes: string;
+  acquisitionType: IProperty["acquisitionType"];
+  brokerName: string;
+  brokerAgency: string;
+  brokerPhone: string;
+  condition: IProperty["condition"] | "";
+  conditionOther: string;
+  facing: IProperty["facing"] | "";
+  amenities: string[];
+  amenityInput: string;
 }
 
 const UNSET = "none";
@@ -105,7 +127,8 @@ const initialFormState: FormState = {
   propertyType: "flat/apartment",
   listingType: "sale",
   status: "available",
-  price: "",
+  priceAmount: "",
+  priceUnit: "lac",
   area: "",
   areaUnit: "sqft",
   bedrooms: "",
@@ -114,14 +137,26 @@ const initialFormState: FormState = {
   address: "",
   city: "",
   location: "",
-  owner: UNSET,
+  ownerName: "",
+  ownerPhone: "",
   assignedAgent: UNSET,
   project: UNSET,
   notes: "",
+  acquisitionType: "direct",
+  brokerName: "",
+  brokerAgency: "",
+  brokerPhone: "",
+  condition: "",
+  conditionOther: "",
+  facing: "",
+  amenities: [],
+  amenityInput: "",
 };
 
 function toFormState(property?: PropertyRow | null): FormState {
   if (!property) return initialFormState;
+
+  const price = fromRupees(property.price);
 
   return {
     propertyId: property.propertyId ?? "",
@@ -130,7 +165,8 @@ function toFormState(property?: PropertyRow | null): FormState {
     propertyType: property.propertyType,
     listingType: property.listingType,
     status: property.status,
-    price: property.price != null ? String(property.price) : "",
+    priceAmount: price.amount,
+    priceUnit: price.unit,
     area: property.area != null ? String(property.area) : "",
     areaUnit: property.areaUnit ?? "sqft",
     bedrooms: property.bedrooms != null ? String(property.bedrooms) : "",
@@ -139,10 +175,20 @@ function toFormState(property?: PropertyRow | null): FormState {
     address: property.address ?? "",
     city: property.city ?? "",
     location: property.location ?? "",
-    owner: property.owner?._id ?? UNSET,
+    ownerName: property.ownerName ?? "",
+    ownerPhone: property.ownerPhone ?? "",
     assignedAgent: property.assignedAgent?._id ?? UNSET,
     project: property.project?._id ?? UNSET,
     notes: property.notes ?? "",
+    acquisitionType: property.acquisitionType ?? "direct",
+    brokerName: property.brokerName ?? "",
+    brokerAgency: property.brokerAgency ?? "",
+    brokerPhone: property.brokerPhone ?? "",
+    condition: property.condition ?? "",
+    conditionOther: property.conditionOther ?? "",
+    facing: property.facing ?? "",
+    amenities: property.amenities ?? [],
+    amenityInput: "",
   };
 }
 
@@ -166,7 +212,6 @@ export function PropertyFormModal({
   const open = controlledOpen ?? uncontrolledOpen;
 
   const [form, setForm] = useState<FormState>(() => toFormState(property));
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -185,13 +230,11 @@ export function PropertyFormModal({
     let cancelled = false;
 
     Promise.all([
-      fetch("/api/customers").then((r) => r.json()),
       fetch("/api/users").then((r) => r.json()),
       fetch("/api/projects").then((r) => r.json()),
     ])
-      .then(([customersRes, usersRes, projectsRes]: [ApiResponse<CustomerOption[]>, ApiResponse<AgentOption[]>, ApiResponse<ProjectOption[]>]) => {
+      .then(([usersRes, projectsRes]: [ApiResponse<AgentOption[]>, ApiResponse<ProjectOption[]>]) => {
         if (cancelled) return;
-        if (customersRes.success && customersRes.data) setCustomers(customersRes.data);
         if (usersRes.success && usersRes.data) setAgents(usersRes.data);
         if (projectsRes.success && projectsRes.data) setProjects(projectsRes.data);
       })
@@ -219,19 +262,28 @@ export function PropertyFormModal({
       propertyType: form.propertyType,
       listingType: form.listingType,
       status: form.status,
-      price: Number(form.price),
+      price: toRupees(form.priceAmount, form.priceUnit) ?? 0,
       area: form.area ? Number(form.area) : undefined,
       areaUnit: form.areaUnit,
-      bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
+      bedrooms: hasBedrooms(form.propertyType) && form.bedrooms ? Number(form.bedrooms) : undefined,
       bathrooms: form.bathrooms ? Number(form.bathrooms) : undefined,
       floor: form.floor || undefined,
       address: form.address || undefined,
       city: form.city,
       location: form.location || undefined,
-      owner: form.owner === UNSET ? undefined : form.owner,
+      ownerName: form.ownerName || undefined,
+      ownerPhone: form.ownerPhone || undefined,
       assignedAgent: form.assignedAgent === UNSET ? undefined : form.assignedAgent,
       project: form.project === UNSET ? undefined : form.project,
       notes: form.notes || undefined,
+      acquisitionType: form.acquisitionType,
+      brokerName: form.acquisitionType === "broker" ? form.brokerName || undefined : undefined,
+      brokerAgency: form.acquisitionType === "broker" ? form.brokerAgency || undefined : undefined,
+      brokerPhone: form.acquisitionType === "broker" ? form.brokerPhone || undefined : undefined,
+      condition: form.condition || undefined,
+      conditionOther: form.condition === "other" ? form.conditionOther || undefined : undefined,
+      facing: form.facing || undefined,
+      amenities: form.amenities,
     };
 
     try {
@@ -297,6 +349,63 @@ export function PropertyFormModal({
             </div>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="acquisitionType">Sourced</Label>
+            <Select
+              value={form.acquisitionType}
+              onValueChange={(val) =>
+                setForm((prev) => ({
+                  ...prev,
+                  acquisitionType: val as IProperty["acquisitionType"],
+                }))
+              }
+            >
+              <SelectTrigger id="acquisitionType" className="w-full">
+                <SelectValue placeholder="Direct or through broker" />
+              </SelectTrigger>
+              <SelectContent>
+                {ACQUISITION_TYPES.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "direct" ? "Direct" : "Through Broker"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {form.acquisitionType === "broker" && (
+            <div className="grid grid-cols-3 gap-3 rounded-lg border border-input p-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="brokerName">Broker name</Label>
+                <Input
+                  id="brokerName"
+                  placeholder="Broker's name"
+                  required
+                  value={form.brokerName}
+                  onChange={(e) => setForm((prev) => ({ ...prev, brokerName: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="brokerAgency">Agency name</Label>
+                <Input
+                  id="brokerAgency"
+                  placeholder="Agency name"
+                  value={form.brokerAgency}
+                  onChange={(e) => setForm((prev) => ({ ...prev, brokerAgency: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="brokerPhone">Broker number</Label>
+                <Input
+                  id="brokerPhone"
+                  type="tel"
+                  placeholder="+1 555 123 4567"
+                  value={form.brokerPhone}
+                  onChange={(e) => setForm((prev) => ({ ...prev, brokerPhone: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="propertyType">Property Type</Label>
@@ -360,19 +469,149 @@ export function PropertyFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="price">Price</Label>
-              <Input
-                id="price"
-                type="number"
-                min={0}
-                required
-                placeholder="250000"
-                value={form.price}
-                onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-              />
+              <Label htmlFor="condition">Condition (optional)</Label>
+              <Select
+                value={form.condition || undefined}
+                onValueChange={(val) =>
+                  setForm((prev) => ({ ...prev, condition: val as IProperty["condition"] }))
+                }
+              >
+                <SelectTrigger id="condition" className="w-full">
+                  <SelectValue placeholder="Select condition" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROPERTY_CONDITIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {toTitleCase(option)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            {form.condition === "other" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="conditionOther">Specify condition</Label>
+                <Input
+                  id="conditionOther"
+                  placeholder="Describe the condition"
+                  required
+                  value={form.conditionOther}
+                  onChange={(e) => setForm((prev) => ({ ...prev, conditionOther: e.target.value }))}
+                />
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="facing">Facing (optional)</Label>
+              <Select
+                value={form.facing || undefined}
+                onValueChange={(val) =>
+                  setForm((prev) => ({ ...prev, facing: val as IProperty["facing"] }))
+                }
+              >
+                <SelectTrigger id="facing" className="w-full">
+                  <SelectValue placeholder="Select facing" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROPERTY_FACING.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {toTitleCase(option)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>Features (optional)</Label>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {PROPERTY_FEATURES.map((feature) => (
+                <label key={feature} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.amenities.includes(feature)}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        amenities: e.target.checked
+                          ? [...prev.amenities, feature]
+                          : prev.amenities.filter((a) => a !== feature),
+                      }))
+                    }
+                  />
+                  {toTitleCase(feature)}
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add another feature…"
+                value={form.amenityInput}
+                onChange={(e) => setForm((prev) => ({ ...prev, amenityInput: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  const value = form.amenityInput.trim();
+                  if (!value || form.amenities.includes(value)) return;
+                  setForm((prev) => ({
+                    ...prev,
+                    amenities: [...prev.amenities, value],
+                    amenityInput: "",
+                  }));
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const value = form.amenityInput.trim();
+                  if (!value || form.amenities.includes(value)) return;
+                  setForm((prev) => ({
+                    ...prev,
+                    amenities: [...prev.amenities, value],
+                    amenityInput: "",
+                  }));
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {form.amenities.filter((a) => !(PROPERTY_FEATURES as readonly string[]).includes(a)).length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {form.amenities
+                  .filter((a) => !(PROPERTY_FEATURES as readonly string[]).includes(a))
+                  .map((amenity) => (
+                    <Badge key={amenity} variant="secondary" className="gap-1">
+                      {amenity}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            amenities: prev.amenities.filter((a) => a !== amenity),
+                          }))
+                        }
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <AmountInput
+              id="price"
+              label="Price"
+              required
+              amount={form.priceAmount}
+              unit={form.priceUnit}
+              onAmountChange={(value) => setForm((prev) => ({ ...prev, priceAmount: value }))}
+              onUnitChange={(value) => setForm((prev) => ({ ...prev, priceUnit: value }))}
+            />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="area">Area (optional)</Label>
               <Input
@@ -407,17 +646,19 @@ export function PropertyFormModal({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="bedrooms">Bedrooms</Label>
-              <Input
-                id="bedrooms"
-                type="number"
-                min={0}
-                placeholder="2"
-                value={form.bedrooms}
-                onChange={(e) => setForm((prev) => ({ ...prev, bedrooms: e.target.value }))}
-              />
-            </div>
+            {hasBedrooms(form.propertyType) && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="bedrooms">Bedrooms</Label>
+                <Input
+                  id="bedrooms"
+                  type="number"
+                  min={0}
+                  placeholder="2"
+                  value={form.bedrooms}
+                  onChange={(e) => setForm((prev) => ({ ...prev, bedrooms: e.target.value }))}
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="bathrooms">Bathrooms</Label>
               <Input
@@ -471,26 +712,29 @@ export function PropertyFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="owner">Owner (Customer)</Label>
-              <Select
-                value={form.owner}
-                onValueChange={(val) => setForm((prev) => ({ ...prev, owner: val }))}
-              >
-                <SelectTrigger id="owner">
-                  <SelectValue placeholder="Select owner" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNSET}>None</SelectItem>
-                  {customers.map((c) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.firstName} {c.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="ownerName">Owner name (optional)</Label>
+              <Input
+                id="ownerName"
+                placeholder="Property owner's name"
+                value={form.ownerName}
+                onChange={(e) => setForm((prev) => ({ ...prev, ownerName: e.target.value }))}
+              />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ownerPhone">Owner number (optional)</Label>
+              <Input
+                id="ownerPhone"
+                type="tel"
+                placeholder="+1 555 123 4567"
+                value={form.ownerPhone}
+                onChange={(e) => setForm((prev) => ({ ...prev, ownerPhone: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="assignedAgent">Assigned Agent</Label>
               <Select
