@@ -21,7 +21,8 @@ export function formatDate(date: Date | string): string {
 }
 
 /** Turns "follow_up" -> "Follow Up" for display in badges and labels. */
-export function toTitleCase(value: string): string {
+export function toTitleCase(value?: string | null): string {
+  if (!value) return "—";
   return value
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

@@ -11,6 +11,7 @@ export async function GET() {
     const customers = await Customer.find()
       .sort({ createdAt: -1 })
       .populate("assignedAgent", "firstName lastName")
+      .populate("referringAgent", "firstName lastName")
       .lean();
     return SuccessResponse("Customers", 200, customers);
   } catch (error) {

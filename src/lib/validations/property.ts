@@ -5,6 +5,7 @@ import {
   PROPERTY_STATUSES,
   AREA_UNITS,
   ACQUISITION_TYPES,
+  SOURCE_TYPES,
   PROPERTY_CONDITIONS,
   PROPERTY_FACING,
 } from "@/constants";
@@ -31,11 +32,15 @@ const propertyBaseSchema = z.object({
   ownerPhone: z.string().optional(),
   assignedAgent: z.string().optional(),
   project: z.string().optional(),
+  projectName: z.string().optional(),
   notes: z.string().optional(),
   acquisitionType: z.enum(ACQUISITION_TYPES).default("direct"),
   brokerName: z.string().optional(),
   brokerAgency: z.string().optional(),
   brokerPhone: z.string().optional(),
+  propertySource: z.enum(SOURCE_TYPES).default("walk_in"),
+  referringAgent: z.string().optional(),
+  referringAgentName: z.string().optional(),
   condition: z.enum(PROPERTY_CONDITIONS).optional(),
   conditionOther: z.string().optional(),
   facing: z.enum(PROPERTY_FACING).optional(),
@@ -45,6 +50,9 @@ function refineProperty<
   T extends {
     acquisitionType?: string;
     brokerName?: string;
+    propertySource?: string;
+    referringAgent?: string;
+    referringAgentName?: string;
     condition?: string;
     conditionOther?: string;
   },
@@ -54,6 +62,18 @@ function refineProperty<
       code: "custom",
       message: "Broker name is required when acquisition type is through broker",
       path: ["brokerName"],
+    });
+  }
+  if (
+    data.acquisitionType === "direct" &&
+    data.propertySource === "agent" &&
+    !data.referringAgent &&
+    !data.referringAgentName?.trim()
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select an agent or enter the agent's name",
+      path: ["referringAgentName"],
     });
   }
   if (data.condition === "other" && !data.conditionOther?.trim()) {

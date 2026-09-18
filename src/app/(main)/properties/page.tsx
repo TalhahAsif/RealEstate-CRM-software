@@ -111,11 +111,13 @@ export default function PropertiesPage() {
       cell: (property) => (
         <div className="flex flex-col">
           <span className="font-medium text-foreground">{property.title}</span>
-          <span className="text-xs text-muted-foreground">
-            {toTitleCase(property.propertyType)} • {property.city}
-          </span>
+          <span className="text-xs text-muted-foreground">{property.city}</span>
         </div>
       ),
+    },
+    {
+      header: "Type",
+      cell: (property) => <Badge variant="outline">{toTitleCase(property.propertyType)}</Badge>,
     },
     {
       header: "Listing",

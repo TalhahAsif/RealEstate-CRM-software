@@ -247,8 +247,22 @@ export default function PropertyDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Project</span>
-                <span className="font-medium">{property.project?.name || "—"}</span>
+                <span className="font-medium">
+                  {property.project?.name || property.projectName || "—"}
+                </span>
               </div>
+              {property.acquisitionType === "direct" ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Came via</span>
+                  <span className="font-medium">
+                    {property.propertySource === "agent"
+                      ? property.referringAgent
+                        ? `${property.referringAgent.firstName} ${property.referringAgent.lastName}`
+                        : property.referringAgentName || "Agent"
+                      : "Walk-in"}
+                  </span>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

@@ -34,7 +34,7 @@ export const LEAD_STATUSES = [
 
 export const LEAD_PRIORITIES = ["hot", "warm", "cold"] as const;
 
-export const CUSTOMER_TYPES = ["buyer", "investor", "for_rent"] as const;
+export const CUSTOMER_TYPES = ["buyer", "renter"] as const;
 
 export const CUSTOMER_PURPOSES = ["living", "investment"] as const;
 
@@ -43,6 +43,9 @@ export const CUSTOMER_STATUSES = ["active", "purchased", "rented", "on_hold"] as
 export const POSSESSION_TYPES = ["ready_to_move", "by_date"] as const;
 
 export const ACQUISITION_TYPES = ["direct", "broker"] as const;
+
+/** How a customer or a direct property came in: on its own, or brought by an agent. */
+export const SOURCE_TYPES = ["walk_in", "agent"] as const;
 
 export const PROPERTY_TYPES = [
   "flat/apartment",

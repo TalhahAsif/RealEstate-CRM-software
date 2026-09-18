@@ -11,6 +11,7 @@ export async function GET() {
     const properties = await Property.find()
       .sort({ createdAt: -1 })
       .populate("assignedAgent", "firstName lastName email")
+      .populate("referringAgent", "firstName lastName")
       .populate("project", "name location")
       .lean();
     return SuccessResponse("Properties fetched successfully", 200, properties);

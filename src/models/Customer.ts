@@ -6,6 +6,7 @@ import {
   POSSESSION_TYPES,
   PROPERTY_TYPES,
   ACQUISITION_TYPES,
+  SOURCE_TYPES,
 } from "@/constants";
 import type {
   CustomerType,
@@ -14,6 +15,7 @@ import type {
   PossessionType,
   PropertyType,
   AcquisitionType,
+  SourceType,
 } from "@/types";
 
 export interface ICustomer extends Document {
@@ -27,6 +29,12 @@ export interface ICustomer extends Document {
   brokerName?: string;
   brokerAgency?: string;
   brokerPhone?: string;
+  /** How this customer came in: walked in on their own, or was brought by an agent. */
+  customerSource: SourceType;
+  /** Set when customerSource is "agent" and the agent is a current CRM user. */
+  referringAgent?: Types.ObjectId;
+  /** Set when customerSource is "agent" but the agent isn't in the CRM's agent list. */
+  referringAgentName?: string;
   budgetMin?: number;
   budgetMax?: number;
   preferredLocations: string[];
@@ -53,6 +61,9 @@ const CustomerSchema = new Schema<ICustomer>(
     brokerName: { type: String, trim: true },
     brokerAgency: { type: String, trim: true },
     brokerPhone: { type: String, trim: true },
+    customerSource: { type: String, enum: SOURCE_TYPES, default: "walk_in" },
+    referringAgent: { type: Schema.Types.ObjectId, ref: "User" },
+    referringAgentName: { type: String, trim: true },
     budgetMin: { type: Number, min: 0 },
     budgetMax: { type: Number, min: 0 },
     preferredLocations: [{ type: String, trim: true }],

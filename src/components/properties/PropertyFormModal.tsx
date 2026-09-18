@@ -26,6 +26,7 @@ import {
   PROPERTY_STATUSES,
   AREA_UNITS,
   ACQUISITION_TYPES,
+  SOURCE_TYPES,
   PROPERTY_CONDITIONS,
   PROPERTY_FACING,
   PROPERTY_FEATURES,
@@ -35,7 +36,8 @@ import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
 import { hasBedrooms } from "@/lib/utils/property";
 import { AmountInput } from "@/components/shared/AmountInput";
 import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
+import { X, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ApiResponse, PropertyType, ListingType, PropertyStatus, AreaUnit } from "@/types";
 import type { IProperty } from "@/models/Property";
 
@@ -63,14 +65,18 @@ export type PropertyRow = Pick<
   | "brokerName"
   | "brokerAgency"
   | "brokerPhone"
+  | "propertySource"
+  | "referringAgentName"
   | "ownerName"
   | "ownerPhone"
   | "condition"
   | "conditionOther"
   | "facing"
+  | "projectName"
 > & {
   _id: string;
   assignedAgent?: { _id: string; firstName: string; lastName: string } | null;
+  referringAgent?: { _id: string; firstName: string; lastName: string } | null;
   project?: { _id: string; name: string } | null;
 };
 
@@ -105,12 +111,17 @@ interface FormState {
   ownerName: string;
   ownerPhone: string;
   assignedAgent: string;
+  projectMode: "existing" | "standalone";
   project: string;
+  projectName: string;
   notes: string;
   acquisitionType: IProperty["acquisitionType"];
   brokerName: string;
   brokerAgency: string;
   brokerPhone: string;
+  propertySource: IProperty["propertySource"];
+  referringAgent: string;
+  referringAgentName: string;
   condition: IProperty["condition"] | "";
   conditionOther: string;
   facing: IProperty["facing"] | "";
@@ -119,6 +130,16 @@ interface FormState {
 }
 
 const UNSET = "none";
+const OTHER_AGENT = "other";
+
+const STEPS = [
+  { key: "basic", label: "Basic Info" },
+  { key: "classification", label: "Classification" },
+  { key: "pricing", label: "Pricing & Size" },
+  { key: "location", label: "Location" },
+  { key: "assignment", label: "Assignment" },
+  { key: "notes", label: "Notes" },
+] as const;
 
 const initialFormState: FormState = {
   propertyId: "",
@@ -140,12 +161,17 @@ const initialFormState: FormState = {
   ownerName: "",
   ownerPhone: "",
   assignedAgent: UNSET,
+  projectMode: "existing",
   project: UNSET,
+  projectName: "",
   notes: "",
   acquisitionType: "direct",
   brokerName: "",
   brokerAgency: "",
   brokerPhone: "",
+  propertySource: "walk_in",
+  referringAgent: UNSET,
+  referringAgentName: "",
   condition: "",
   conditionOther: "",
   facing: "",
@@ -178,12 +204,19 @@ function toFormState(property?: PropertyRow | null): FormState {
     ownerName: property.ownerName ?? "",
     ownerPhone: property.ownerPhone ?? "",
     assignedAgent: property.assignedAgent?._id ?? UNSET,
+    projectMode: property.project?._id ? "existing" : "standalone",
     project: property.project?._id ?? UNSET,
+    projectName: property.projectName ?? "",
     notes: property.notes ?? "",
     acquisitionType: property.acquisitionType ?? "direct",
     brokerName: property.brokerName ?? "",
     brokerAgency: property.brokerAgency ?? "",
     brokerPhone: property.brokerPhone ?? "",
+    propertySource: property.propertySource ?? "walk_in",
+    referringAgent:
+      property.referringAgent?._id ??
+      (property.referringAgentName ? OTHER_AGENT : UNSET),
+    referringAgentName: property.referringAgentName ?? "",
     condition: property.condition ?? "",
     conditionOther: property.conditionOther ?? "",
     facing: property.facing ?? "",
@@ -216,11 +249,13 @@ export function PropertyFormModal({
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     if (open) {
       setForm(toFormState(property));
       setError(null);
+      setStep(0);
     }
   }, [open, property]);
 
@@ -250,9 +285,49 @@ export function PropertyFormModal({
     onOpenChange?.(nextOpen);
   }
 
+  function validateForm(): string | null {
+    if (!form.title.trim()) {
+      setStep(0);
+      return "Title is required.";
+    }
+    if (form.acquisitionType === "broker" && !form.brokerName.trim()) {
+      setStep(0);
+      return "Broker name is required.";
+    }
+    if (
+      form.acquisitionType === "direct" &&
+      form.propertySource === "agent" &&
+      form.referringAgent === OTHER_AGENT &&
+      !form.referringAgentName.trim()
+    ) {
+      setStep(0);
+      return "Agent's name is required.";
+    }
+    if (form.condition === "other" && !form.conditionOther.trim()) {
+      setStep(1);
+      return "Please specify the condition.";
+    }
+    if (!toRupees(form.priceAmount, form.priceUnit)) {
+      setStep(2);
+      return "Price is required.";
+    }
+    if (!form.city.trim()) {
+      setStep(3);
+      return "City is required.";
+    }
+    return null;
+  }
+
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setIsSubmitting(true);
 
     const payload = {
@@ -274,12 +349,29 @@ export function PropertyFormModal({
       ownerName: form.ownerName || undefined,
       ownerPhone: form.ownerPhone || undefined,
       assignedAgent: form.assignedAgent === UNSET ? undefined : form.assignedAgent,
-      project: form.project === UNSET ? undefined : form.project,
+      project:
+        form.projectMode === "existing" && form.project !== UNSET ? form.project : undefined,
+      projectName:
+        form.projectMode === "standalone" ? form.projectName.trim() || undefined : undefined,
       notes: form.notes || undefined,
       acquisitionType: form.acquisitionType,
       brokerName: form.acquisitionType === "broker" ? form.brokerName || undefined : undefined,
       brokerAgency: form.acquisitionType === "broker" ? form.brokerAgency || undefined : undefined,
       brokerPhone: form.acquisitionType === "broker" ? form.brokerPhone || undefined : undefined,
+      propertySource: form.acquisitionType === "direct" ? form.propertySource : undefined,
+      referringAgent:
+        form.acquisitionType === "direct" &&
+        form.propertySource === "agent" &&
+        form.referringAgent !== UNSET &&
+        form.referringAgent !== OTHER_AGENT
+          ? form.referringAgent
+          : undefined,
+      referringAgentName:
+        form.acquisitionType === "direct" &&
+        form.propertySource === "agent" &&
+        form.referringAgent === OTHER_AGENT
+          ? form.referringAgentName.trim() || undefined
+          : undefined,
       condition: form.condition || undefined,
       conditionOther: form.condition === "other" ? form.conditionOther || undefined : undefined,
       facing: form.facing || undefined,
@@ -323,10 +415,37 @@ export function PropertyFormModal({
               : "Create a new property listing in the inventory."}
           </DialogDescription>
         </DialogHeader>
+        <div className="flex flex-wrap gap-1.5 border-b border-input px-4 pb-3">
+          {STEPS.map((s, i) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setStep(i)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                i === step
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input text-muted-foreground hover:bg-accent"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-4 items-center justify-center rounded-full text-[10px]",
+                  i === step ? "bg-primary-foreground text-primary" : "bg-muted"
+                )}
+              >
+                {i < step ? <Check className="size-3" /> : i + 1}
+              </span>
+              {s.label}
+            </button>
+          ))}
+        </div>
         <form
-          className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto p-4 pt-0"
+          className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto p-4 pt-3"
           onSubmit={handleSubmit}
         >
+          {step === 0 && (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="title">Title</Label>
@@ -405,7 +524,83 @@ export function PropertyFormModal({
               </div>
             </div>
           )}
+          {form.acquisitionType === "direct" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="propertySource">Property came via</Label>
+                <Select
+                  value={form.propertySource}
+                  onValueChange={(val) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      propertySource: val as IProperty["propertySource"],
+                      referringAgent: val === "agent" ? prev.referringAgent : UNSET,
+                      referringAgentName: val === "agent" ? prev.referringAgentName : "",
+                    }))
+                  }
+                >
+                  <SelectTrigger id="propertySource" className="w-full">
+                    <SelectValue placeholder="Walk-in or agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_TYPES.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option === "walk_in" ? "Walk-in" : "Agent"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.propertySource === "agent" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="referringAgent">Which agent</Label>
+                  <Select
+                    value={form.referringAgent}
+                    onValueChange={(val) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        referringAgent: val,
+                        referringAgentName: val === OTHER_AGENT ? prev.referringAgentName : "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="referringAgent" className="w-full">
+                      <SelectValue placeholder="Select agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map((a) => (
+                        <SelectItem key={a._id} value={a._id}>
+                          {a.firstName} {a.lastName}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={OTHER_AGENT}>Other (not listed)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+          {form.acquisitionType === "direct" &&
+            form.propertySource === "agent" &&
+            form.referringAgent === OTHER_AGENT && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="referringAgentName">Agent&apos;s name</Label>
+                <Input
+                  id="referringAgentName"
+                  placeholder="Agent's name"
+                  required
+                  value={form.referringAgentName}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, referringAgentName: e.target.value }))
+                  }
+                />
+              </div>
+            )}
+          </>
+          )}
 
+          {step === 1 && (
+          <>
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="propertyType">Property Type</Label>
@@ -601,7 +796,11 @@ export function PropertyFormModal({
               </div>
             )}
           </div>
+          </>
+          )}
 
+          {step === 2 && (
+          <>
           <div className="grid grid-cols-3 gap-3">
             <AmountInput
               id="price"
@@ -680,7 +879,11 @@ export function PropertyFormModal({
               />
             </div>
           </div>
+          </>
+          )}
 
+          {step === 3 && (
+          <>
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="city">City</Label>
@@ -733,7 +936,11 @@ export function PropertyFormModal({
               />
             </div>
           </div>
+          </>
+          )}
 
+          {step === 4 && (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="assignedAgent">Assigned Agent</Label>
@@ -755,26 +962,59 @@ export function PropertyFormModal({
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="project">Project</Label>
-              <Select
-                value={form.project}
-                onValueChange={(val) => setForm((prev) => ({ ...prev, project: val }))}
-              >
-                <SelectTrigger id="project">
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNSET}>None</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p._id} value={p._id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Project</Label>
+              <div className="flex gap-3 text-sm">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="projectMode"
+                    checked={form.projectMode === "existing"}
+                    onChange={() => setForm((prev) => ({ ...prev, projectMode: "existing" }))}
+                  />
+                  Select project
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="projectMode"
+                    checked={form.projectMode === "standalone"}
+                    onChange={() => setForm((prev) => ({ ...prev, projectMode: "standalone" }))}
+                  />
+                  Not in a project
+                </label>
+              </div>
+              {form.projectMode === "existing" ? (
+                <Select
+                  value={form.project}
+                  onValueChange={(val) => setForm((prev) => ({ ...prev, project: val }))}
+                >
+                  <SelectTrigger id="project" className="w-full">
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNSET}>None</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p._id} value={p._id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="projectName"
+                  placeholder="e.g. Standalone plot, no project"
+                  value={form.projectName}
+                  onChange={(e) => setForm((prev) => ({ ...prev, projectName: e.target.value }))}
+                />
+              )}
             </div>
           </div>
+          </>
+          )}
 
+          {step === 5 && (
+          <>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">Description (optional)</Label>
             <textarea
@@ -798,26 +1038,51 @@ export function PropertyFormModal({
               className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
             />
           </div>
+          </>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting
-                ? isEdit
-                  ? "Saving…"
-                  : "Creating…"
-                : isEdit
-                  ? "Save changes"
-                  : "Create property"}
-            </Button>
+          <DialogFooter className="flex items-center justify-between sm:justify-between">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              {step > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep((s) => Math.max(0, s - 1))}
+                  disabled={isSubmitting}
+                >
+                  Back
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {step < STEPS.length - 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+                >
+                  Next
+                </Button>
+              )}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? isEdit
+                    ? "Saving…"
+                    : "Creating…"
+                  : isEdit
+                    ? "Save changes"
+                    : "Create property"}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

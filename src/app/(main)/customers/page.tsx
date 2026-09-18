@@ -130,7 +130,9 @@ export default function CustomersPage() {
     {
       header: "Status",
       cell: (customer) => (
-        <Badge variant={STATUS_BADGE_VARIANT[customer.status]}>{toTitleCase(customer.status)}</Badge>
+        <Badge variant={STATUS_BADGE_VARIANT[customer.status] ?? "secondary"}>
+          {toTitleCase(customer.status)}
+        </Badge>
       ),
     },
     {
@@ -194,7 +196,7 @@ export default function CustomersPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Customers"
-        description="Manage buyers, investors, and renters."
+        description="Manage buyers and renters."
         action={
           <CustomerFormModal
             trigger={

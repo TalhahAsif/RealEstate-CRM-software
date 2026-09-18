@@ -198,6 +198,16 @@ export default function CustomerDetailPage() {
                     : "Unassigned"}
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Came via</span>
+                <span className="font-medium">
+                  {customer.customerSource === "agent"
+                    ? customer.referringAgent
+                      ? `${customer.referringAgent.firstName} ${customer.referringAgent.lastName}`
+                      : customer.referringAgentName || "Agent"
+                    : "Walk-in"}
+                </span>
+              </div>
             </CardContent>
           </Card>
 

@@ -26,12 +26,17 @@ import {
   CUSTOMER_STATUSES,
   POSSESSION_TYPES,
   ACQUISITION_TYPES,
+  SOURCE_TYPES,
   PROPERTY_TYPES,
 } from "@/constants";
 import { toTitleCase } from "@/lib/utils/format";
 import { toRupees, fromRupees, type CurrencyUnit } from "@/lib/utils/currency";
+import { hasBedrooms } from "@/lib/utils/property";
 import { AmountInput } from "@/components/shared/AmountInput";
-import type { ApiResponse } from "@/types";
+import { TagInput } from "@/components/shared/TagInput";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { ApiResponse, PropertyType } from "@/types";
 import type { ICustomer } from "@/models/Customer";
 import type { IUser } from "@/models/User";
 
@@ -56,9 +61,12 @@ export type CustomerRow = Pick<
   | "preferredPropertyTypes"
   | "possessionType"
   | "possessionDate"
+  | "customerSource"
+  | "referringAgentName"
 > & {
   _id: string;
   assignedAgent?: { _id: string; firstName: string; lastName: string } | null;
+  referringAgent?: { _id: string; firstName: string; lastName: string } | null;
 };
 
 type AgentOption = Pick<IUser, "firstName" | "lastName"> & { _id: string };
@@ -75,12 +83,15 @@ interface FormState {
   brokerName: string;
   brokerAgency: string;
   brokerPhone: string;
+  customerSource: ICustomer["customerSource"];
+  referringAgent: string;
+  referringAgentName: string;
   budgetMinAmount: string;
   budgetMinUnit: CurrencyUnit;
   budgetMaxAmount: string;
   budgetMaxUnit: CurrencyUnit;
   bedrooms: string;
-  preferredLocations: string;
+  preferredLocations: string[];
   preferredPropertyTypes: string[];
   possessionType: ICustomer["possessionType"] | "";
   possessionDate: string;
@@ -89,6 +100,15 @@ interface FormState {
 }
 
 const UNASSIGNED = "unassigned";
+const OTHER_AGENT = "other";
+
+const STEPS = [
+  { key: "basic", label: "Basic Info" },
+  { key: "origin", label: "Origin" },
+  { key: "classification", label: "Classification" },
+  { key: "preferences", label: "Preferences" },
+  { key: "possession", label: "Possession & Notes" },
+] as const;
 
 const initialFormState: FormState = {
   firstName: "",
@@ -102,12 +122,15 @@ const initialFormState: FormState = {
   brokerName: "",
   brokerAgency: "",
   brokerPhone: "",
+  customerSource: "walk_in",
+  referringAgent: UNASSIGNED,
+  referringAgentName: "",
   budgetMinAmount: "",
   budgetMinUnit: "lac",
   budgetMaxAmount: "",
   budgetMaxUnit: "lac",
   bedrooms: "",
-  preferredLocations: "",
+  preferredLocations: [],
   preferredPropertyTypes: [],
   possessionType: "",
   possessionDate: "",
@@ -139,12 +162,17 @@ function toFormState(customer?: CustomerRow | null): FormState {
     brokerName: customer.brokerName ?? "",
     brokerAgency: customer.brokerAgency ?? "",
     brokerPhone: customer.brokerPhone ?? "",
+    customerSource: customer.customerSource ?? "walk_in",
+    referringAgent:
+      customer.referringAgent?._id ??
+      (customer.referringAgentName ? OTHER_AGENT : UNASSIGNED),
+    referringAgentName: customer.referringAgentName ?? "",
     budgetMinAmount: budgetMin.amount,
     budgetMinUnit: budgetMin.unit,
     budgetMaxAmount: budgetMax.amount,
     budgetMaxUnit: budgetMax.unit,
     bedrooms: customer.bedrooms != null ? String(customer.bedrooms) : "",
-    preferredLocations: (customer.preferredLocations ?? []).join(", "),
+    preferredLocations: customer.preferredLocations ?? [],
     preferredPropertyTypes: customer.preferredPropertyTypes ?? [],
     possessionType: customer.possessionType ?? "",
     possessionDate: customer.possessionDate ? toDateInput(customer.possessionDate) : "",
@@ -179,11 +207,13 @@ export function CustomerFormModal({
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     if (open) {
       setForm(toFormState(customer));
       setError(null);
+      setStep(0);
     }
   }, [open, customer]);
 
@@ -210,9 +240,48 @@ export function CustomerFormModal({
     onOpenChange?.(nextOpen);
   }
 
+  const showBedrooms = form.preferredPropertyTypes.some((type) =>
+    hasBedrooms(type as PropertyType)
+  );
+
+  function validateForm(): string | null {
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setStep(0);
+      return "First and last name are required.";
+    }
+    if (form.acquisitionType === "broker" && !form.brokerName.trim()) {
+      setStep(0);
+      return "Broker name is required.";
+    }
+    if (
+      form.customerSource === "agent" &&
+      form.referringAgent === OTHER_AGENT &&
+      !form.referringAgentName.trim()
+    ) {
+      setStep(1);
+      return "Agent's name is required.";
+    }
+    if (!form.phone.trim()) {
+      setStep(1);
+      return "Phone is required.";
+    }
+    if (form.possessionType === "by_date" && !form.possessionDate) {
+      setStep(4);
+      return "Possession date is required.";
+    }
+    return null;
+  }
+
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setIsSubmitting(true);
 
     const payload = {
@@ -222,18 +291,26 @@ export function CustomerFormModal({
       phone: form.phone,
       type: form.type,
       status: form.status,
-      purpose: form.purpose || undefined,
+      purpose: form.type === "buyer" ? form.purpose || undefined : undefined,
       acquisitionType: form.acquisitionType,
       brokerName: form.acquisitionType === "broker" ? form.brokerName || undefined : undefined,
       brokerAgency: form.acquisitionType === "broker" ? form.brokerAgency || undefined : undefined,
       brokerPhone: form.acquisitionType === "broker" ? form.brokerPhone || undefined : undefined,
+      customerSource: form.customerSource,
+      referringAgent:
+        form.customerSource === "agent" &&
+        form.referringAgent !== UNASSIGNED &&
+        form.referringAgent !== OTHER_AGENT
+          ? form.referringAgent
+          : undefined,
+      referringAgentName:
+        form.customerSource === "agent" && form.referringAgent === OTHER_AGENT
+          ? form.referringAgentName.trim() || undefined
+          : undefined,
       budgetMin: toRupees(form.budgetMinAmount, form.budgetMinUnit),
       budgetMax: toRupees(form.budgetMaxAmount, form.budgetMaxUnit),
-      bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
-      preferredLocations: form.preferredLocations
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
+      bedrooms: showBedrooms && form.bedrooms ? Number(form.bedrooms) : undefined,
+      preferredLocations: form.preferredLocations,
       preferredPropertyTypes: form.preferredPropertyTypes,
       possessionType: form.possessionType || undefined,
       possessionDate:
@@ -281,7 +358,34 @@ export function CustomerFormModal({
               : "Add a buyer, investor, or renter."}
           </DialogDescription>
         </DialogHeader>
-        <form className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto p-4 pt-0" onSubmit={handleSubmit}>
+        <div className="flex flex-wrap gap-1.5 border-b border-input px-4 pb-3">
+          {STEPS.map((s, i) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setStep(i)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                i === step
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input text-muted-foreground hover:bg-accent"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-4 items-center justify-center rounded-full text-[10px]",
+                  i === step ? "bg-primary-foreground text-primary" : "bg-muted"
+                )}
+              >
+                {i < step ? <Check className="size-3" /> : i + 1}
+              </span>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <form className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto p-4 pt-3" onSubmit={handleSubmit}>
+          {step === 0 && (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="firstName">First name</Label>
@@ -370,6 +474,79 @@ export function CustomerFormModal({
               </div>
             </div>
           )}
+          </>
+          )}
+
+          {step === 1 && (
+          <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="customerSource">Customer came via</Label>
+              <Select
+                value={form.customerSource}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    customerSource: value as ICustomer["customerSource"],
+                    referringAgent: value === "agent" ? prev.referringAgent : UNASSIGNED,
+                    referringAgentName: value === "agent" ? prev.referringAgentName : "",
+                  }))
+                }
+              >
+                <SelectTrigger id="customerSource" className="w-full">
+                  <SelectValue placeholder="Walk-in or agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOURCE_TYPES.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option === "walk_in" ? "Walk-in" : "Agent"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.customerSource === "agent" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="referringAgent">Which agent</Label>
+                <Select
+                  value={form.referringAgent}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      referringAgent: value,
+                      referringAgentName: value === OTHER_AGENT ? prev.referringAgentName : "",
+                    }))
+                  }
+                >
+                  <SelectTrigger id="referringAgent" className="w-full">
+                    <SelectValue placeholder="Select agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent._id} value={agent._id}>
+                        {agent.firstName} {agent.lastName}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={OTHER_AGENT}>Other (not listed)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          {form.customerSource === "agent" && form.referringAgent === OTHER_AGENT && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="referringAgentName">Agent&apos;s name</Label>
+              <Input
+                id="referringAgentName"
+                placeholder="Agent's name"
+                required
+                value={form.referringAgentName}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, referringAgentName: event.target.value }))
+                }
+              />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="phone">Phone</Label>
@@ -397,13 +574,22 @@ export function CustomerFormModal({
               />
             </div>
           </div>
+          </>
+          )}
+
+          {step === 2 && (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="type">Type</Label>
               <Select
                 value={form.type}
                 onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, type: value as ICustomer["type"] }))
+                  setForm((prev) => ({
+                    ...prev,
+                    type: value as ICustomer["type"],
+                    purpose: value === "buyer" ? prev.purpose : "",
+                  }))
                 }
               >
                 <SelectTrigger id="type" className="w-full">
@@ -418,26 +604,28 @@ export function CustomerFormModal({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="purpose">Purpose (optional)</Label>
-              <Select
-                value={form.purpose || undefined}
-                onValueChange={(value) =>
-                  setForm((prev) => ({ ...prev, purpose: value as ICustomer["purpose"] }))
-                }
-              >
-                <SelectTrigger id="purpose" className="w-full">
-                  <SelectValue placeholder="Select purpose" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CUSTOMER_PURPOSES.map((purpose) => (
-                    <SelectItem key={purpose} value={purpose}>
-                      {toTitleCase(purpose)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {form.type === "buyer" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="purpose">Purpose (optional)</Label>
+                <Select
+                  value={form.purpose || undefined}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({ ...prev, purpose: value as ICustomer["purpose"] }))
+                  }
+                >
+                  <SelectTrigger id="purpose" className="w-full">
+                    <SelectValue placeholder="Select purpose" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CUSTOMER_PURPOSES.map((purpose) => (
+                      <SelectItem key={purpose} value={purpose}>
+                        {toTitleCase(purpose)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="status">Status</Label>
@@ -478,6 +666,11 @@ export function CustomerFormModal({
               </SelectContent>
             </Select>
           </div>
+          </>
+          )}
+
+          {step === 3 && (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <AmountInput
               id="budgetMin"
@@ -497,26 +690,13 @@ export function CustomerFormModal({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="bedrooms">Bedrooms</Label>
-            <Input
-              id="bedrooms"
-              type="number"
-              min={0}
-              className="max-w-32"
-              value={form.bedrooms}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, bedrooms: event.target.value }))
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="preferredLocations">Preferred locations (comma separated)</Label>
-            <Input
+            <Label htmlFor="preferredLocations">Preferred locations</Label>
+            <TagInput
               id="preferredLocations"
-              placeholder="Downtown, DHA Phase 6"
-              value={form.preferredLocations}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, preferredLocations: event.target.value }))
+              placeholder="Downtown, DHA Phase 6…"
+              values={form.preferredLocations}
+              onChange={(values) =>
+                setForm((prev) => ({ ...prev, preferredLocations: values }))
               }
             />
           </div>
@@ -542,6 +722,26 @@ export function CustomerFormModal({
               ))}
             </div>
           </div>
+          {showBedrooms && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="bedrooms">Bedrooms</Label>
+              <Input
+                id="bedrooms"
+                type="number"
+                min={0}
+                className="max-w-32"
+                value={form.bedrooms}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, bedrooms: event.target.value }))
+                }
+              />
+            </div>
+          )}
+          </>
+          )}
+
+          {step === 4 && (
+          <>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="possessionType">Possession needed (optional)</Label>
@@ -594,25 +794,51 @@ export function CustomerFormModal({
               className="w-full min-w-0 resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
             />
           </div>
+          </>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting
-                ? isEdit
-                  ? "Saving…"
-                  : "Creating…"
-                : isEdit
-                  ? "Save changes"
-                  : "Create customer"}
-            </Button>
+          <DialogFooter className="flex items-center justify-between sm:justify-between">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              {step > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep((s) => Math.max(0, s - 1))}
+                  disabled={isSubmitting}
+                >
+                  Back
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {step < STEPS.length - 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+                >
+                  Next
+                </Button>
+              )}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? isEdit
+                    ? "Saving…"
+                    : "Creating…"
+                  : isEdit
+                    ? "Save changes"
+                    : "Create customer"}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

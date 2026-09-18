@@ -32,7 +32,7 @@ export interface MatchableProperty {
 
 /** Which listing type a customer is in the market for, based on their type. */
 function wantedListingType(customerType: CustomerType): ListingType {
-  return customerType === "for_rent" ? "rent" : "sale";
+  return customerType === "renter" ? "rent" : "sale";
 }
 
 const BUDGET_FLEX = 0.1;

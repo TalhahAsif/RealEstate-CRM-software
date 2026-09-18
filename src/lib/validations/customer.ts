@@ -6,6 +6,7 @@ import {
   POSSESSION_TYPES,
   PROPERTY_TYPES,
   ACQUISITION_TYPES,
+  SOURCE_TYPES,
 } from "@/constants";
 
 const customerBaseSchema = z.object({
@@ -19,6 +20,9 @@ const customerBaseSchema = z.object({
   brokerName: z.string().optional(),
   brokerAgency: z.string().optional(),
   brokerPhone: z.string().optional(),
+  customerSource: z.enum(SOURCE_TYPES).default("walk_in"),
+  referringAgent: z.string().optional(),
+  referringAgentName: z.string().optional(),
   budgetMin: z.number().min(0).optional(),
   budgetMax: z.number().min(0).optional(),
   preferredLocations: z.array(z.string()).default([]),
@@ -35,6 +39,9 @@ function refineCustomer<
   T extends {
     acquisitionType?: string;
     brokerName?: string;
+    customerSource?: string;
+    referringAgent?: string;
+    referringAgentName?: string;
     possessionType?: string;
     possessionDate?: Date;
   },
@@ -44,6 +51,17 @@ function refineCustomer<
       code: "custom",
       message: "Broker name is required when acquisition type is through broker",
       path: ["brokerName"],
+    });
+  }
+  if (
+    data.customerSource === "agent" &&
+    !data.referringAgent &&
+    !data.referringAgentName?.trim()
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select an agent or enter the agent's name",
+      path: ["referringAgentName"],
     });
   }
   if (data.possessionType === "by_date" && !data.possessionDate) {

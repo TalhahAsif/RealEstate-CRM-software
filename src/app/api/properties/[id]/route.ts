@@ -20,6 +20,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     await connectToDatabase();
     const property = await Property.findById(id)
       .populate("assignedAgent", "firstName lastName email")
+      .populate("referringAgent", "firstName lastName")
       .populate("project", "name location")
       .lean();
 
@@ -54,6 +55,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       runValidators: true,
     })
       .populate("assignedAgent", "firstName lastName email")
+      .populate("referringAgent", "firstName lastName")
       .populate("project", "name location")
       .lean();
 

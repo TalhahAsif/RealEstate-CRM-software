@@ -8,6 +8,7 @@ import type {
   CUSTOMER_STATUSES,
   POSSESSION_TYPES,
   ACQUISITION_TYPES,
+  SOURCE_TYPES,
   PROPERTY_TYPES,
   LISTING_TYPES,
   PROPERTY_STATUSES,
@@ -36,6 +37,7 @@ export type CustomerPurpose = (typeof CUSTOMER_PURPOSES)[number];
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
 export type PossessionType = (typeof POSSESSION_TYPES)[number];
 export type AcquisitionType = (typeof ACQUISITION_TYPES)[number];
+export type SourceType = (typeof SOURCE_TYPES)[number];
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 export type ListingType = (typeof LISTING_TYPES)[number];
 export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
